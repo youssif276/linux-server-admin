@@ -1,0 +1,10 @@
+# Generated system reports
+reports/*.txt
+
+# Runtime logs
+logs/*.log
+
+# Temporary files
+*.tmp
+*.swp
+*~
