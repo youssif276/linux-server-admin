@@ -101,6 +101,64 @@ else
     fail "System event logging"
 fi
 
+
+# Test 10: Missing mount point
+TEST_DIR="$(mktemp -d)" || {
+    fail "Create temporary directory for error tests"
+    TEST_DIR=""
+}
+
+if [[ -n "$TEST_DIR" ]]; then
+    mkdir -p "$TEST_DIR/project"
+
+    cp config.sh disk-check.sh "$TEST_DIR/"
+
+    sed -i \
+        "s|^PROJECT_DIR=.*|PROJECT_DIR=\"$TEST_DIR/project\"|" \
+        "$TEST_DIR/config.sh"
+
+    sed -i \
+        's|^DISK_MOUNT_POINT=.*|DISK_MOUNT_POINT="/definitely-not-a-real-mount-point"|' \
+        "$TEST_DIR/config.sh"
+
+    if bash "$TEST_DIR/disk-check.sh" \
+        > "$TEST_DIR/missing-mount.log" 2>&1; then
+        fail "Missing mount point is rejected"
+    elif grep -q 'Mount point does not exist' "$TEST_DIR/missing-mount.log"; then
+        pass "Missing mount point is rejected"
+    else
+        fail "Missing mount point error message"
+        cat "$TEST_DIR/missing-mount.log"
+    fi
+
+    # Test 11: Disk usage command failure
+    mkdir -p "$TEST_DIR/bin"
+
+    cat > "$TEST_DIR/bin/df" <<'MOCK_DF'
+#!/usr/bin/env bash
+printf 'Simulated df failure\n' >&2
+exit 1
+MOCK_DF
+
+    chmod +x "$TEST_DIR/bin/df"
+
+    sed -i \
+        's|^DISK_MOUNT_POINT=.*|DISK_MOUNT_POINT="/"|' \
+        "$TEST_DIR/config.sh"
+
+    if PATH="$TEST_DIR/bin:$PATH" bash "$TEST_DIR/disk-check.sh" \
+        > "$TEST_DIR/df-failure.log" 2>&1; then
+        fail "Disk usage command failure is handled"
+    elif grep -q 'Failed to read disk usage' "$TEST_DIR/df-failure.log"; then
+        pass "Disk usage command failure is handled"
+    else
+        fail "Disk usage command failure error message"
+        cat "$TEST_DIR/df-failure.log"
+    fi
+
+    rm -rf "$TEST_DIR"
+fi
+
 printf '\n'
 printf '%s\n' "======================================"
 printf 'Passed: %s\n' "$PASS_COUNT"
