@@ -28,6 +28,20 @@ log_message() {
     fi
 }
 
+# Run a monitoring command and report failures clearly
+run_monitoring_command() {
+    local DESCRIPTION="$1"
+    shift
+
+    if "$@"; then
+        return 0
+    else
+        printf 'WARNING: Failed to collect %s.\n' "$DESCRIPTION"
+        log_message "WARNING" "Failed to collect $DESCRIPTION."
+        return 1
+    fi
+}
+
 # Record script start
 log_message "INFO" "System check started."
 
@@ -60,12 +74,17 @@ if {
     echo "Kernel: $(uname -r)"
     echo "Architecture: $(uname -m)"
     echo "Operating System:"
-    cat /etc/os-release
+    if ! cat /etc/os-release; then
+        echo "WARNING: Could not read operating system information."
+        log_message "WARNING" "Could not read /etc/os-release."
+    fi
 
     echo
     echo "2. SYSTEM UPTIME"
     echo "--------------------------------------"
-    uptime
+    if ! run_monitoring_command "system uptime" uptime; then
+        echo "Uptime information is unavailable."
+    fi
 
     echo
     echo "3. CPU USAGE"
@@ -105,7 +124,10 @@ if {
                   IDLE_DIFF >= 0 &&
                   IDLE_DIFF <= TOTAL_DIFF )); then
 
-                CPU_USAGE="$(awk                     -v total="$TOTAL_DIFF"                     -v idle="$IDLE_DIFF"                     'BEGIN {
+                CPU_USAGE="$(awk \
+                    -v total="$TOTAL_DIFF" \
+                    -v idle="$IDLE_DIFF" \
+                    'BEGIN {
                         printf "%.1f", (total - idle) * 100 / total
                     }')"
 
@@ -113,50 +135,77 @@ if {
                 echo "Measurement Interval: 1 second"
             else
                 echo "WARNING: Could not calculate CPU usage."
+                log_message "WARNING" "Could not calculate CPU usage."
             fi
         else
             echo "WARNING: Could not read valid CPU statistics."
+            log_message "WARNING" "Could not read valid CPU statistics."
         fi
     else
         echo "WARNING: /proc/stat is not available."
+        log_message "WARNING" "/proc/stat is not available."
     fi
 
     echo
     echo "4. MEMORY USAGE"
     echo "--------------------------------------"
-    free -h
+
+    if ! run_monitoring_command "memory usage" free -h; then
+        echo "Memory information is unavailable."
+    fi
 
     echo
     echo "5. ROOT FILESYSTEM USAGE"
     echo "--------------------------------------"
-    df -h "$DISK_MOUNT_POINT"
+
+    if ! run_monitoring_command \
+        "filesystem usage" df -h "$DISK_MOUNT_POINT"; then
+        echo "Filesystem information is unavailable."
+    fi
 
     echo
     echo "6. DISK USAGE STATUS"
     echo "--------------------------------------"
 
-    DF_OUTPUT="$(df -P "$DISK_MOUNT_POINT")"
-    DISK_USAGE="$(printf '%s\n' "$DF_OUTPUT" |
-        awk 'NR==2 {gsub(/%/, "", $5); print $5}')"
+    if DF_OUTPUT="$(df -P "$DISK_MOUNT_POINT")"; then
+        DISK_USAGE="$(printf '%s\n' "$DF_OUTPUT" |
+            awk 'NR==2 {gsub(/%/, "", $5); print $5}')"
 
-    if [[ "$DISK_USAGE" =~ ^[0-9]+$ ]]; then
-        echo "Mount point: $DISK_MOUNT_POINT"
-        echo "Current disk usage: ${DISK_USAGE}%"
-        echo "Warning threshold: ${DISK_USAGE_THRESHOLD}%"
+        if [[ "$DISK_USAGE" =~ ^[0-9]+$ ]]; then
+            echo "Mount point: $DISK_MOUNT_POINT"
+            echo "Current disk usage: ${DISK_USAGE}%"
+            echo "Warning threshold: ${DISK_USAGE_THRESHOLD}%"
 
-        if (( DISK_USAGE >= DISK_USAGE_THRESHOLD )); then
-            echo "WARNING: Disk usage has reached the threshold!"
+            if (( DISK_USAGE >= DISK_USAGE_THRESHOLD )); then
+                echo "WARNING: Disk usage has reached the threshold!"
+                log_message "WARNING" \
+                    "Disk usage is ${DISK_USAGE}% on $DISK_MOUNT_POINT"
+            else
+                echo "OK: Disk usage is below the threshold."
+                log_message "INFO" \
+                    "Disk usage is ${DISK_USAGE}% on $DISK_MOUNT_POINT"
+            fi
         else
-            echo "OK: Disk usage is below the threshold."
+            echo "ERROR: Could not determine disk usage."
+            log_message "ERROR" "Could not determine disk usage."
         fi
     else
-        echo "ERROR: Could not determine disk usage."
+        echo "ERROR: Failed to read disk usage."
+        log_message "ERROR" \
+            "Failed to read disk usage for $DISK_MOUNT_POINT"
     fi
 
     echo
     echo "7. TOP ${TOP_PROCESSES_COUNT} PROCESSES BY MEMORY"
     echo "--------------------------------------"
-    ps aux --sort=-%mem | head -n "$((TOP_PROCESSES_COUNT + 1))"
+
+    if PROCESS_LIST="$(ps aux --sort=-%mem)"; then
+        printf '%s\n' "$PROCESS_LIST" |
+            head -n "$((TOP_PROCESSES_COUNT + 1))"
+    else
+        echo "WARNING: Could not collect process information."
+        log_message "WARNING" "Could not collect process information."
+    fi
 
     echo
     echo "======================================"
@@ -181,6 +230,7 @@ printf '%s\n' '--------------------------------------'
 
 if ! cat "$REPORT_FILE"; then
     log_message "ERROR" "Failed to display system report: $REPORT_FILE"
+    printf 'ERROR: Failed to display system report.\n' >&2
     exit 1
 fi
 
