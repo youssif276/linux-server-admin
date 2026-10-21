@@ -27,18 +27,29 @@ else
     fail "Valid configuration is accepted"
 fi
 
-# Test 2: Invalid threshold
+# Test 2: Invalid disk threshold
 sed 's/^DISK_USAGE_THRESHOLD=80$/DISK_USAGE_THRESHOLD=150/' \
-    "$SCRIPT_DIR/config.sh" > "$TEST_DIR/config-invalid-threshold.sh"
+    "$SCRIPT_DIR/config.sh" > "$TEST_DIR/config-invalid-disk.sh"
 
-if bash -c 'source "$1"' _ "$TEST_DIR/config-invalid-threshold.sh" \
-    > "$TEST_DIR/threshold-output.txt" 2>&1; then
-    fail "Invalid threshold is rejected"
+if bash -c 'source "$1"' _ "$TEST_DIR/config-invalid-disk.sh" \
+    > "$TEST_DIR/disk-output.txt" 2>&1; then
+    fail "Invalid disk threshold is rejected"
 else
-    pass "Invalid threshold is rejected"
+    pass "Invalid disk threshold is rejected"
 fi
 
-# Test 3: Invalid process count
+# Test 3: Invalid memory threshold
+sed 's/^MEMORY_USAGE_THRESHOLD=80$/MEMORY_USAGE_THRESHOLD=150/' \
+    "$SCRIPT_DIR/config.sh" > "$TEST_DIR/config-invalid-memory.sh"
+
+if bash -c 'source "$1"' _ "$TEST_DIR/config-invalid-memory.sh" \
+    > "$TEST_DIR/memory-output.txt" 2>&1; then
+    fail "Invalid memory threshold is rejected"
+else
+    pass "Invalid memory threshold is rejected"
+fi
+
+# Test 4: Invalid process count
 sed 's/^TOP_PROCESSES_COUNT=5$/TOP_PROCESSES_COUNT=0/' \
     "$SCRIPT_DIR/config.sh" > "$TEST_DIR/config-invalid-processes.sh"
 

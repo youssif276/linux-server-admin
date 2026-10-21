@@ -78,6 +78,27 @@ if ./system-info.sh > /tmp/system-info-test.log 2>&1; then
             fail "Memory monitoring section"
         fi
 
+        # Test 8: Memory usage percentage
+        if grep -Eq '^Memory Usage: [0-9]+\.[0-9]+%$' "$REPORT_PATH"; then
+            pass "Memory usage percentage"
+        else
+            fail "Memory usage percentage"
+        fi
+
+        # Test 9: Memory warning threshold
+        if grep -Eq '^Warning threshold: [0-9]+%$' "$REPORT_PATH"; then
+            pass "Memory warning threshold"
+        else
+            fail "Memory warning threshold"
+        fi
+
+        # Test 10: Memory status
+        if grep -Eq '^OK: Memory usage is below the threshold\.$|^WARNING: Memory usage has reached the threshold!$' "$REPORT_PATH"; then
+            pass "Memory threshold status"
+        else
+            fail "Memory threshold status"
+        fi
+
         # Test 8: Disk section
         if grep -q 'DISK USAGE STATUS' "$REPORT_PATH"; then
             pass "Disk monitoring section"

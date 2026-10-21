@@ -14,6 +14,7 @@ LOG_FILE="$LOG_DIR/system.log"
 # Monitoring configuration
 DISK_USAGE_THRESHOLD=80
 DISK_MOUNT_POINT="/"
+MEMORY_USAGE_THRESHOLD=80
 
 # Display configuration
 TOP_PROCESSES_COUNT=5
@@ -28,6 +29,13 @@ fi
 if [[ ! "$DISK_USAGE_THRESHOLD" =~ ^[0-9]+$ ]] ||
    (( DISK_USAGE_THRESHOLD < 1 || DISK_USAGE_THRESHOLD > 100 )); then
     printf 'ERROR: DISK_USAGE_THRESHOLD must be between 1 and 100.\n' >&2
+    return 1 2>/dev/null || exit 1
+fi
+
+# Validate memory usage threshold
+if [[ ! "$MEMORY_USAGE_THRESHOLD" =~ ^[0-9]+$ ]] ||
+   (( MEMORY_USAGE_THRESHOLD < 1 || MEMORY_USAGE_THRESHOLD > 100 )); then
+    printf 'ERROR: MEMORY_USAGE_THRESHOLD must be between 1 and 100.\n' >&2
     return 1 2>/dev/null || exit 1
 fi
 

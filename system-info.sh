@@ -147,14 +147,52 @@ if {
     fi
 
     echo
-    echo "4. MEMORY USAGE"
+        echo "4. MEMORY USAGE"
     echo "--------------------------------------"
 
-    if ! run_monitoring_command "memory usage" free -h; then
+    if MEMORY_OUTPUT="$(free -b)"; then
+        MEMORY_VALUES="$(printf '%s\n' "$MEMORY_OUTPUT" |
+            awk '$1 == "Mem:" {print $2, $3, $7; exit}')"
+
+        read -r MEMORY_TOTAL MEMORY_USED MEMORY_AVAILABLE <<< "$MEMORY_VALUES"
+
+        if [[ "$MEMORY_TOTAL" =~ ^[0-9]+$ &&
+              "$MEMORY_USED" =~ ^[0-9]+$ &&
+              "$MEMORY_AVAILABLE" =~ ^[0-9]+$ ]] &&
+           (( MEMORY_TOTAL > 0 )); then
+
+            MEMORY_USAGE="$(awk \
+                -v used="$MEMORY_USED" \
+                -v total="$MEMORY_TOTAL" \
+                'BEGIN {printf "%.1f", used * 100 / total}')"
+
+            MEMORY_USAGE_INTEGER="${MEMORY_USAGE%.*}"
+
+            echo "Total Memory: $(numfmt --to=iec "$MEMORY_TOTAL")"
+            echo "Used Memory: $(numfmt --to=iec "$MEMORY_USED")"
+            echo "Available Memory: $(numfmt --to=iec "$MEMORY_AVAILABLE")"
+            echo "Memory Usage: ${MEMORY_USAGE}%"
+            echo "Warning threshold: ${MEMORY_USAGE_THRESHOLD}%"
+
+            if (( MEMORY_USAGE_INTEGER >= MEMORY_USAGE_THRESHOLD )); then
+                echo "WARNING: Memory usage has reached the threshold!"
+                log_message "WARNING" \
+                    "Memory usage is ${MEMORY_USAGE}%."
+            else
+                echo "OK: Memory usage is below the threshold."
+                log_message "INFO" \
+                    "Memory usage is ${MEMORY_USAGE}%."
+            fi
+        else
+            echo "WARNING: Could not parse valid memory statistics."
+            log_message "WARNING" "Could not parse valid memory statistics."
+        fi
+    else
+        echo "WARNING: Failed to collect memory usage."
         echo "Memory information is unavailable."
+        log_message "WARNING" "Failed to collect memory usage."
     fi
 
-    echo
     echo "5. ROOT FILESYSTEM USAGE"
     echo "--------------------------------------"
 
