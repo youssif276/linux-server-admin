@@ -68,17 +68,71 @@ if {
     uptime
 
     echo
-    echo "3. MEMORY USAGE"
+    echo "3. CPU USAGE"
+    echo "--------------------------------------"
+
+    if [[ -r /proc/stat ]]; then
+        CPU_BEFORE="$(awk '/^cpu / {
+            idle = $5 + $6
+            total = 0
+            for (i = 2; i <= 9; i++) total += $i
+            printf "%.0f %.0f\n", total, idle
+            exit
+        }' /proc/stat)"
+
+        sleep 1
+
+        CPU_AFTER="$(awk '/^cpu / {
+            idle = $5 + $6
+            total = 0
+            for (i = 2; i <= 9; i++) total += $i
+            printf "%.0f %.0f\n", total, idle
+            exit
+        }' /proc/stat)"
+
+        read -r TOTAL_BEFORE IDLE_BEFORE <<< "$CPU_BEFORE"
+        read -r TOTAL_AFTER IDLE_AFTER <<< "$CPU_AFTER"
+
+        if [[ "$TOTAL_BEFORE" =~ ^[0-9]+$ &&
+              "$IDLE_BEFORE" =~ ^[0-9]+$ &&
+              "$TOTAL_AFTER" =~ ^[0-9]+$ &&
+              "$IDLE_AFTER" =~ ^[0-9]+$ ]]; then
+
+            TOTAL_DIFF=$((TOTAL_AFTER - TOTAL_BEFORE))
+            IDLE_DIFF=$((IDLE_AFTER - IDLE_BEFORE))
+
+            if (( TOTAL_DIFF > 0 &&
+                  IDLE_DIFF >= 0 &&
+                  IDLE_DIFF <= TOTAL_DIFF )); then
+
+                CPU_USAGE="$(awk                     -v total="$TOTAL_DIFF"                     -v idle="$IDLE_DIFF"                     'BEGIN {
+                        printf "%.1f", (total - idle) * 100 / total
+                    }')"
+
+                echo "CPU Usage: ${CPU_USAGE}%"
+                echo "Measurement Interval: 1 second"
+            else
+                echo "WARNING: Could not calculate CPU usage."
+            fi
+        else
+            echo "WARNING: Could not read valid CPU statistics."
+        fi
+    else
+        echo "WARNING: /proc/stat is not available."
+    fi
+
+    echo
+    echo "4. MEMORY USAGE"
     echo "--------------------------------------"
     free -h
 
     echo
-    echo "4. ROOT FILESYSTEM USAGE"
+    echo "5. ROOT FILESYSTEM USAGE"
     echo "--------------------------------------"
     df -h "$DISK_MOUNT_POINT"
 
     echo
-    echo "5. DISK USAGE STATUS"
+    echo "6. DISK USAGE STATUS"
     echo "--------------------------------------"
 
     DF_OUTPUT="$(df -P "$DISK_MOUNT_POINT")"
@@ -100,7 +154,7 @@ if {
     fi
 
     echo
-    echo "6. TOP ${TOP_PROCESSES_COUNT} PROCESSES BY MEMORY"
+    echo "7. TOP ${TOP_PROCESSES_COUNT} PROCESSES BY MEMORY"
     echo "--------------------------------------"
     ps aux --sort=-%mem | head -n "$((TOP_PROCESSES_COUNT + 1))"
 
